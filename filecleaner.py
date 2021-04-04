@@ -1,18 +1,16 @@
 from pathlib import Path
 import argparse
-from abc import ABC, abstractmethod
-import pyalpm
 from collections import namedtuple
 from datetime import datetime, timedelta
 
-class PackageManager(ABC):
-    @abstractmethod
+class PackageManager:
     def owning_packages(self, path):
         "Returns the package which provides path, or None"
-        pass
+        []
 
-class Alpm(PackageManager):
+class Pacman(PackageManager):
     def __init__(self, root="/", db="/var/lib/pacman"):
+        import pyalpm
         self.handle = pyalpm.Handle(root, db)
 
         self.path_table = {}
@@ -95,18 +93,35 @@ def old_packages(tree, days=365):
         if datetime.now()-atime > timedelta(days):
             print(pkg, atime)
 
-
-ignores = [
-    # "/home",
-    "/sys",
-    "/dev",
-    "/proc",
-    "/boot",
-    "/tmp",
-    "/run"
-]
+def package_manager(name):
+    if name == "none":
+        return PackageManager()
+    elif name == "pacman":
+        return Pacman()
+    else:
+        raise KeyError(name)
 
 if __name__ == "__main__":
-    p = path_tree(Alpm(), Path("/"), ignores)
-    old_dirs(p)
-    old_packages(p)
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Find unused files')
+    parser.add_argument('--root', type=Path, default="/", help='the root directory to scan')
+    parser.add_argument('--days', metavar='N', type=int, default=365, help='filter directories older than N days')
+    parser.add_argument('--pkg-days', metavar='N', type=int, default=365, help='filter packages older than N days')
+    # float to allow exponential notation
+    parser.add_argument('--size', metavar='BYTES', type=float, default=1e8, help='filter directories larger than BYTES')
+    parser.add_argument('--ignore', metavar='PATH', nargs='+', help='Ignore files under PATH')
+    parser.add_argument('--ignore-file', metavar='FILE', type=argparse.FileType('r+'), default="ignorelist.txt", help='Ignore files listed in FILE')
+    parser.add_argument('--package-manager', type=package_manager, default="none", help='Ignore files listed in FILE')
+
+    args = parser.parse_args()
+    print(args)
+
+    ignores = args.ignore or []
+    if args.ignore_file:
+        for line in args.ignore_file:
+            ignores.append(line.strip())
+
+    p = path_tree(args.package_manager, args.root, ignores)
+    old_dirs(p, args.days, args.size)
+    old_packages(p, args.pkg_days)
