@@ -1,4 +1,5 @@
 from pathlib import Path
+from shutil import rmtree
 import argparse
 from collections import namedtuple
 from datetime import datetime, timedelta
@@ -69,6 +70,28 @@ def path_tree(mgr, root, ignores):
         size = 0
         return Tree(root, time, size, [], {})
 
+def file_prompt(path):
+    response = input("What to do [d/i/s/l/p]: ")
+    if response == 'd':
+        input("confirm delete")
+        rmtree(path)
+    elif response == 'i':
+        with open('ignorelist.txt', 'a') as f:
+            f.write('\n')
+            f.write(str(path))
+    elif response == 's':
+        return
+    elif response == 'p':
+        print(path.parent)
+        file_prompt(path.parent)
+    elif response == 'l':
+        for p in path.iterdir():
+            print(p)
+        file_prompt(path)
+    else:
+        file_prompt(path)
+    
+
 def apply_filter(tree, f):
     "Return subtrees maching f(tree)"
     if f(tree):
@@ -82,10 +105,12 @@ def old_dirs(tree, days=365, bytes=1e8):
         lambda t:
             datetime.now()-t.atime > timedelta(days)
             and t.name.is_dir()
-            and t.size > bytes)
+            and t.size > bytes
+            and not t.packages)
     files = sorted(files, key=lambda f: f.size, reverse=True)
     for f in files:
         print(f.name, f.size/1e9, "GB")
+        file_prompt(f.name)
     print(sum(f.size for f in files)/1e9, "GB")
 
 def old_packages(tree, days=365):
