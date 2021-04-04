@@ -135,9 +135,9 @@ if __name__ == "__main__":
     parser.add_argument('--pkg-days', metavar='N', type=int, default=365, help='filter packages older than N days')
     # float to allow exponential notation
     parser.add_argument('--size', metavar='BYTES', type=float, default=1e8, help='filter directories larger than BYTES')
-    parser.add_argument('--ignore', metavar='PATH', nargs='+', help='Ignore files under PATH')
+    parser.add_argument('--ignore', metavar='PATH', nargs='*', help='Ignore files under PATH')
     parser.add_argument('--ignore-file', metavar='FILE', type=argparse.FileType('r+'), default="ignorelist.txt", help='Ignore files listed in FILE')
-    parser.add_argument('--package-manager', type=package_manager, default="none", help='Ignore files listed in FILE')
+    parser.add_argument('--package-manager', metavar='PM', type=package_manager, default="none", help='Used for finding which package owns a file')
 
     args = parser.parse_args()
     print(args)
