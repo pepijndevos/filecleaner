@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 class PackageManager:
     def owning_packages(self, path):
         "Returns the package which provides path, or None"
-        []
+        return []
 
 class Pacman(PackageManager):
     def __init__(self, root="/", db="/var/lib/pacman"):
