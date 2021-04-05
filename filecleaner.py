@@ -3,11 +3,21 @@ from shutil import rmtree
 import argparse
 from collections import namedtuple
 from datetime import datetime, timedelta
+import subprocess
+import pickle
 
 class PackageManager:
     def owning_packages(self, path):
         "Returns the package which provides path, or None"
         return []
+
+    def uninstall(self, pkg):
+        "Uninstall the given package"
+        raise NotImplementedError()
+
+    def required_by(self, pkg):
+        "List all packages that have pkg as a dependency"
+        raise NotImplementedError()
 
 class Pacman(PackageManager):
     def __init__(self, root="/", db="/var/lib/pacman"):
@@ -24,6 +34,12 @@ class Pacman(PackageManager):
 
     def owning_packages(self, path):
         return self.path_table.get(path, [])
+
+    def uninstall(self, pkg):
+        subprocess.run(["sudo", "pacman", "-Rs", pkg])
+
+    def required_by(self, pkg):
+        subprocess.run(["pactree", "-r", pkg])
 
 def path_match(patterns, path):
     return any(path.is_relative_to(p) for p in patterns)
@@ -91,6 +107,17 @@ def file_prompt(path):
     else:
         file_prompt(path)
     
+def pkg_prompt(mgr, pkg):
+    response = input("Uninstall? [y/n/l]: ")
+    if response == 'y':
+        mgr.uninstall(pkg)
+    elif response == 'l':
+        mgr.required_by(pkg)
+        pkg_prompt(mgr,pkg)
+    elif response == 'n':
+        return
+    else:
+        pkg_prompt(mgr,pkg)
 
 def apply_filter(tree, f):
     "Return subtrees maching f(tree)"
@@ -113,10 +140,11 @@ def old_dirs(tree, days=365, bytes=1e8):
         file_prompt(f.name)
     print(sum(f.size for f in files)/1e9, "GB")
 
-def old_packages(tree, days=365):
+def old_packages(tree, mgr, days=365):
     for pkg, atime in tree.packages.items():
         if datetime.now()-atime > timedelta(days):
             print(pkg, atime)
+            pkg_prompt(mgr, pkg)
 
 def package_manager(name):
     if name == "none":
@@ -136,8 +164,9 @@ if __name__ == "__main__":
     # float to allow exponential notation
     parser.add_argument('--size', metavar='BYTES', type=float, default=1e8, help='filter directories larger than BYTES')
     parser.add_argument('--ignore', metavar='PATH', nargs='*', help='Ignore files under PATH')
-    parser.add_argument('--ignore-file', metavar='FILE', type=argparse.FileType('r+'), default="ignorelist.txt", help='Ignore files listed in FILE')
+    parser.add_argument('--ignore-file', metavar='FILE', type=argparse.FileType('r'), default="ignorelist.txt", help='Ignore files listed in FILE')
     parser.add_argument('--package-manager', metavar='PM', type=package_manager, default="none", help='Used for finding which package owns a file')
+    parser.add_argument('--cache', metavar='FILE', help='Load/save state to a file')
 
     args = parser.parse_args()
     print(args)
@@ -147,6 +176,15 @@ if __name__ == "__main__":
         for line in args.ignore_file:
             ignores.append(line.strip())
 
-    p = path_tree(args.package_manager, args.root, ignores)
+    if args.cache and Path(args.cache).is_file():
+        with open(args.cache, 'rb') as f:
+            p = pickle.load(f)
+    else:
+        p = path_tree(args.package_manager, args.root, ignores)
+    
+    if args.cache and not Path(args.cache).is_file():
+        with open(args.cache, 'wb') as f:
+            pickle.dump(p, f)
+
     old_dirs(p, args.days, args.size)
-    old_packages(p, args.pkg_days)
+    old_packages(p, args.package_manager, args.pkg_days)
